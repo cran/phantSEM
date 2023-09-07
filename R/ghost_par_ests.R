@@ -1,0 +1,117 @@
+#' Provide parameter estimates from sensitivity analysis function
+#'
+#' `ghost_par_ests()` Selects certain parameter estimates from the output of the sensitivity analysis.
+#' @param step3 The object returned from SA_step3.
+#' @param parameter_label The label used for the parameter in the lavaan code.
+#' @param remove_NA Remove rows for combinations of phantom variable parameters that resulted in inadmissable solutions in lavaan.
+#' @returns A dataframe of the parameter estimates from the lavaan model.
+#' @importFrom stats na.omit
+#' @export
+#'
+#' @examples
+#' # example code
+#'
+#' covmatrix <- matrix(c(
+#'   0.25, 0.95, 0.43,
+#'   0.95, 8.87, 2.66,
+#'   0.43, 2.66, 10.86
+#' ), nrow = 3, byrow = TRUE)
+#' colnames(covmatrix) <- c("X", "M2", "Y2")
+#'
+#' # lavann syntax for observed model
+#' observed <- " M2 ~ X
+#'              Y2 ~ M2+X "
+#'
+#' # lavaan output
+#' obs_output <- lavaan::sem(model = observed, sample.cov = covmatrix, sample.nobs = 200)
+#'
+#' # lavaan syntax for phantom variable model
+#' phantom <- " M2 ~ M1 + Y1 + a*X
+#'                Y2 ~ M1 + Y1 + b*M2 + cp*X "
+#'
+#' Step1 <- SA_step1(
+#'   lavoutput = obs_output,
+#'   mod_obs = observed,
+#'   mod_phant = phantom
+#' )
+#'
+#' phantom_assignment <- list(
+#'   "CovM1X" = 0,
+#'   "CovY1M1" = "CovY2M2",
+#'   "CovY1X" = 0,
+#'   "VarM1" = 1,
+#'   "VarY1" = 1,
+#'   "CovM1M2" = seq(.4, .6, .1),
+#'   "CovY1Y2" = "CovM1M2",
+#'   "CovY1M2" = seq(.2, .4, .1),
+#'   "CovM1Y2" = "CovY1M2"
+#' )
+#' Step2 <- SA_step2(
+#'   phantom_assignment = phantom_assignment,
+#'   step1 = Step1
+#' )
+#' Step3 <- SA_step3(
+#'   step2 = Step2,
+#'   n = 200
+#' )
+#'
+#' b_results <- ghost_par_ests(
+#'   step3 = Step3,
+#'   parameter_label = "b",
+#'   remove_NA = TRUE
+#' )
+ghost_par_ests <- function(step3,
+                           parameter_label,
+                           remove_NA = FALSE) {
+  resultlist <- step3[[1]]
+  combos <- step3[[4]]
+  parmatrix <- matrix(NA, nrow = 0, ncol = 10)
+  comboindex <- matrix(NA, nrow = 0, ncol = 1)
+  colnames(parmatrix) <- c(
+    "lhs",
+    "op",
+    "rhs",
+    "label",
+    "est",
+    "se",
+    "z",
+    "pvalue",
+    "ci.lower",
+    "ci.upper"
+  )
+
+  for (i in 1:nrow(combos)) {
+    reptemp <- i
+    if (length(resultlist[[i]]) > 1) {
+      pars <- resultlist[[i]]
+      partemp <- pars[which(pars$"label" == parameter_label), ]
+    } else {
+      partemp <- rep(NA, 10)
+    }
+    parmatrix <- rbind(parmatrix, partemp)
+    comboindex <- rbind(comboindex, reptemp)
+  }
+
+  out <- cbind(comboindex, parmatrix)
+  colnames(out) <-
+    c(
+      "rep",
+      "lhs",
+      "op",
+      "rhs",
+      "label",
+      "est",
+      "se",
+      "z",
+      "pvalue",
+      "ci.lower",
+      "ci.upper"
+    )
+  # out <- cbind(combos, out)
+
+  if (remove_NA == TRUE) {
+    out <- stats::na.omit(out)
+  }
+
+  return(out)
+}
